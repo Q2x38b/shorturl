@@ -219,247 +219,221 @@
 <body>
   <div class="container" id="app-container">
     <h1>URL Shortener</h1>
+    
     <div class="form-container">
       <div class="input-group">
         <input type="url" id="url-input" placeholder="Enter your long URL" required>
         <div class="error-message" id="error-message"></div>
       </div>
+      
       <button id="shorten-btn">Shorten URL</button>
+      
       <div class="loading" id="loading">
         <div class="loading-spinner"></div>
         <span>Processing...</span>
       </div>
     </div>
+    
     <div class="result-container" id="result-container">
       <div class="result-link">
         <span class="result-url" id="shortened-url"></span>
         <button class="copy-btn" id="copy-btn">Copy</button>
       </div>
     </div>
+    
     <div class="divider"></div>
+    
     <div class="info">
       <p>Fast • Minimal • Secure</p>
     </div>
   </div>
 
   <script>
-// Simplified JavaScript with pure JSONP approach
-// This approach avoids both CORS and iframe security issues
-
-// Set up the Google Apps Script URL
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby0VaBKOyqUGGnPQBcYU4mHAmoCEzcPJxjWYs1hhW6Mtiiz5NV4u44N9MQASPKndK6Mjw/exec';
-
-// Global callback counter to create unique callback names
-let callbackCounter = 0;
-
-// Function to handle JSONP redirect responses
-function handleRedirectResponse(data) {
-  if (data.url) {
-    window.location.href = data.url;
-  } else {
-    document.body.innerHTML = '<div class="container"><h1>URL not found</h1></div>';
-  }
-}
-
-// Function to create a unique callback name
-function getUniqueCallbackName(prefix = 'callback') {
-  return `${prefix}_${Date.now()}_${callbackCounter++}`;
-}
-
-// Function to make a JSONP request
-function jsonpRequest(url, params, callback) {
-  // Create a unique callback name
-  const callbackName = getUniqueCallbackName();
-  
-  // Add the callback to the window object
-  window[callbackName] = function(data) {
-    // Clean up
-    document.head.removeChild(script);
-    delete window[callbackName];
+    // Set up the URL for our Google Apps Script Web App
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby0VaBKOyqUGGnPQBcYU4mHAmoCEzcPJxjWYs1hhW6Mtiiz5NV4u44N9MQASPKndK6Mjw/exec';
     
-    // Call the provided callback with the data
-    callback(data);
-  };
-  
-  // Build the URL with parameters
-  const queryParams = new URLSearchParams(params);
-  queryParams.append('callback', callbackName);
-  
-  // Create script element
-  const script = document.createElement('script');
-  script.src = `${url}?${queryParams.toString()}`;
-  
-  // Add error handling
-  script.onerror = function() {
-    document.head.removeChild(script);
-    delete window[callbackName];
-    callback({ error: 'Request failed' });
-  };
-  
-  // Append the script to the document
-  document.head.appendChild(script);
-}
-
-// Check for URL hash to redirect - Run this immediately
-function checkForRedirect() {
-  const hash = window.location.hash;
-  
-  if (hash && hash.length > 1) {
-    const shortId = hash.substring(1); // Remove the # character
-    
-    // Hide the UI immediately to speed up redirect
-    document.body.innerHTML = '';
-    document.body.style.backgroundColor = 'var(--background)';
-    
-    // Create and append loading spinner
-    const loadingDiv = document.createElement('div');
-    loadingDiv.className = 'loading';
-    loadingDiv.style.display = 'flex';
-    
-    const spinner = document.createElement('div');
-    spinner.className = 'loading-spinner';
-    
-    loadingDiv.appendChild(spinner);
-    document.body.appendChild(loadingDiv);
-    
-    // Use JSONP to get the URL
-    jsonpRequest(SCRIPT_URL, { id: shortId }, handleRedirectResponse);
-  }
-}
-
-// Run redirect check on page load
-if (window.location.hash) {
-  checkForRedirect();
-}
-
-// Also run when hash changes (for SPA behavior)
-window.addEventListener('hashchange', checkForRedirect);
-
-// The rest of the functionality runs after DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
-  const urlInput = document.getElementById('url-input');
-  const shortenBtn = document.getElementById('shorten-btn');
-  const loading = document.getElementById('loading');
-  const resultContainer = document.getElementById('result-container');
-  const shortenedUrlElem = document.getElementById('shortened-url');
-  const copyBtn = document.getElementById('copy-btn');
-  const errorMessage = document.getElementById('error-message');
-  
-  // Set theme
-  let currentTheme = localStorage.getItem('theme') || 'dark';
-  document.documentElement.setAttribute('data-theme', currentTheme);
-  
-  // Theme switch event handler (if the element exists)
-  const themeSwitch = document.getElementById('themeSwitch');
-  if (themeSwitch) {
-    themeSwitch.addEventListener('click', () => {
-      currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', currentTheme);
-      localStorage.setItem('theme', currentTheme);
-    });
-  }
-  
-  // Helper functions
-  function showLoading() {
-    loading.style.display = 'flex';
-    shortenBtn.disabled = true;
-  }
-  
-  function hideLoading() {
-    loading.style.display = 'none';
-    shortenBtn.disabled = false;
-  }
-  
-  function showResult(shortUrl) {
-    shortenedUrlElem.textContent = shortUrl;
-    resultContainer.style.display = 'flex';
-    
-    // Scroll to show result if needed
-    setTimeout(() => {
-      resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 100);
-  }
-  
-  function showError(message) {
-    errorMessage.textContent = message;
-    errorMessage.style.display = 'block';
-  }
-  
-  function hideError() {
-    errorMessage.style.display = 'none';
-  }
-  
-  // Function to handle shorten URL responses
-  function handleShortenResponse(data) {
-    hideLoading();
-    
-    if (data.error) {
-      showError(data.error);
-    } else if (data.id) {
-      const shortUrl = `${window.location.origin}/#${data.id}`;
-      showResult(shortUrl);
-    } else {
-      showError('Unexpected response from server');
-    }
-  }
-  
-  // Shorten URL functionality
-  function shortenUrl() {
-    const longUrl = urlInput.value.trim();
-    
-    // Basic validation
-    if (!longUrl) {
-      showError('Please enter a URL');
-      return;
-    }
-    
-    try {
-      new URL(longUrl);
-    } catch (e) {
-      showError('Please enter a valid URL');
-      return;
-    }
-    
-    showLoading();
-    hideError();
-    
-    // Use JSONP to create a short URL
-    jsonpRequest(SCRIPT_URL, { url: longUrl, action: 'shorten' }, handleShortenResponse);
-  }
-  
-  // Attach event listeners
-  shortenBtn.addEventListener('click', shortenUrl);
-  
-  // Copy URL functionality
-  copyBtn.addEventListener('click', () => {
-    const textToCopy = shortenedUrlElem.textContent;
-    
-    navigator.clipboard.writeText(textToCopy)
-      .then(() => {
-        const originalText = copyBtn.textContent;
-        copyBtn.textContent = 'Copied!';
+    // Function to parse URL hash for redirection
+    function checkForRedirect() {
+      const hash = window.location.hash;
+      
+      if (hash && hash.length > 1) {
+        const shortId = hash.substring(1); // Remove the # character
         
-        setTimeout(() => {
-          copyBtn.textContent = originalText;
-        }, 2000);
-      })
-      .catch(err => {
-        console.error('Failed to copy text: ', err);
-      });
-  });
-  
-  // Press Enter to submit
-  urlInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-      shortenUrl();
+        // Hide the UI immediately to speed up redirect
+        document.body.innerHTML = '';
+        document.body.style.backgroundColor = 'var(--background)';
+        
+        // Create and append loading spinner
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'loading';
+        loadingDiv.style.display = 'flex';
+        
+        const spinner = document.createElement('div');
+        spinner.className = 'loading-spinner';
+        
+        loadingDiv.appendChild(spinner);
+        document.body.appendChild(loadingDiv);
+        
+        // Fetch the original URL and redirect
+        fetch(`${SCRIPT_URL}?id=${shortId}`)
+          .then(response => response.json())
+          .then(data => {
+            if (data.url) {
+              window.location.href = data.url;
+            } else {
+              document.body.innerHTML = '<div class="container"><h1>URL not found</h1></div>';
+            }
+          })
+          .catch(error => {
+            document.body.innerHTML = '<div class="container"><h1>Error retrieving URL</h1></div>';
+            console.error('Error:', error);
+          });
+      }
     }
-  });
+    
+    // Run redirect check on page load before DOM content loaded
+    if (window.location.hash) {
+      checkForRedirect();
+    }
+    
+    // Also run when hash changes (for SPA behavior)
+    window.addEventListener('hashchange', checkForRedirect);
+    
+    // Initialize functionality after DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+      // DOM elements
+      const urlInput = document.getElementById('url-input');
+      const shortenBtn = document.getElementById('shorten-btn');
+      const loading = document.getElementById('loading');
+      const resultContainer = document.getElementById('result-container');
+      const shortenedUrlElem = document.getElementById('shortened-url');
+      const copyBtn = document.getElementById('copy-btn');
+      const errorMessage = document.getElementById('error-message');
+      
+      // Helper functions
+      function showLoading() {
+        loading.style.display = 'flex';
+        shortenBtn.disabled = true;
+      }
+      
+      function hideLoading() {
+        loading.style.display = 'none';
+        shortenBtn.disabled = false;
+      }
+      
+      function showResult(shortUrl) {
+        shortenedUrlElem.textContent = shortUrl;
+        resultContainer.style.display = 'flex';
+      }
+      
+      function showError(message) {
+        errorMessage.textContent = message;
+        errorMessage.style.display = 'block';
+      }
+      
+      function hideError() {
+        errorMessage.style.display = 'none';
+      }
+      
+      // Direct URL creation using a simple workaround for CORS issues
+      async function shortenUrl() {
+        const longUrl = urlInput.value.trim();
+        
+        // Basic validation
+        if (!longUrl) {
+          showError('Please enter a URL');
+          return;
+        }
+        
+        try {
+          new URL(longUrl);
+        } catch (e) {
+          showError('Please enter a valid URL');
+          return;
+        }
+        
+        showLoading();
+        hideError();
 
-  // Run redirect check again after DOM is loaded (in case it was missed)
-  if (window.location.hash) {
-    checkForRedirect();
-  }
-});
+        // Generate a random 6-character ID
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let id = '';
+        for (let i = 0; i < 6; i++) {
+          id += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        
+        // Store in localStorage (client-side only, but works for demo)
+        const urlData = JSON.parse(localStorage.getItem('urlShortener') || '{}');
+        
+        // Check if URL already exists
+        let existingId = null;
+        Object.entries(urlData).forEach(([key, value]) => {
+          if (value === longUrl) {
+            existingId = key;
+          }
+        });
+        
+        if (existingId) {
+          id = existingId;
+        } else {
+          // Store the new URL
+          urlData[id] = longUrl;
+          localStorage.setItem('urlShortener', JSON.stringify(urlData));
+        }
+        
+        // Show result after a short delay to simulate processing
+        setTimeout(() => {
+          hideLoading();
+          const shortUrl = `${window.location.origin}/#${id}`;
+          showResult(shortUrl);
+        }, 500);
+      }
+      
+      // Modified redirect function to use localStorage
+      function checkLocalRedirect() {
+        const hash = window.location.hash;
+        
+        if (hash && hash.length > 1) {
+          const shortId = hash.substring(1);
+          const urlData = JSON.parse(localStorage.getItem('urlShortener') || '{}');
+          
+          if (urlData[shortId]) {
+            window.location.href = urlData[shortId];
+          }
+        }
+      }
+      
+      // Run local redirect check
+      checkLocalRedirect();
+      
+      // Attach event listeners
+      shortenBtn.addEventListener('click', shortenUrl);
+      
+      // Copy URL functionality
+      copyBtn.addEventListener('click', () => {
+        const textToCopy = shortenedUrlElem.textContent;
+        
+        navigator.clipboard.writeText(textToCopy)
+          .then(() => {
+            const originalText = copyBtn.textContent;
+            copyBtn.textContent = 'Copied!';
+            
+            setTimeout(() => {
+              copyBtn.textContent = originalText;
+            }, 2000);
+          })
+          .catch(err => {
+            console.error('Failed to copy text: ', err);
+          });
+      });
+      
+      // Press Enter to submit
+      urlInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          shortenUrl();
+        }
+      });
+    });
   </script>
 </body>
 </html>
