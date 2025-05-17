@@ -243,143 +243,222 @@
   </div>
 
   <script>
-    function checkForRedirect() {
-      const hash = window.location.hash;
-      if (hash && hash.length > 1) {
-        const shortId = hash.substring(1);
-        document.body.innerHTML = '';
-        document.body.style.backgroundColor = 'var(--background)';
-        const loadingDiv = document.createElement('div');
-        loadingDiv.className = 'loading';
-        loadingDiv.style.display = 'flex';
-        const spinner = document.createElement('div');
-        spinner.className = 'loading-spinner';
-        loadingDiv.appendChild(spinner);
-        document.body.appendChild(loadingDiv);
-        fetch(`${SCRIPT_URL}?id=${shortId}`)
-          .then(response => response.json())
-          .then(data => {
-            if (data.url) {
-              window.location.href = data.url;
-            } else {
-              document.body.innerHTML = '<div class="container"><h1>URL not found</h1></div>';
-            }
-          })
-          .catch(() => {
-            document.body.innerHTML = '<div class="container"><h1>Error retrieving URL</h1></div>';
-          });
-      }
-    }
+// Updated JavaScript for URL Shortener with CORS Workaround
 
-    if (window.location.hash) {
-      checkForRedirect();
-    }
-    window.addEventListener('hashchange', checkForRedirect);
+// Set up the CORS proxy URL for POST requests
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby0VaBKOyqUGGnPQBcYU4mHAmoCEzcPJxjWYs1hhW6Mtiiz5NV4u44N9MQASPKndK6Mjw/exec';
+// The JSONP URL is used for GET requests (URL lookup)
+const JSONP_URL = SCRIPT_URL + '?callback=handleJSONPResponse';
 
-    document.addEventListener('DOMContentLoaded', function() {
-      const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby0VaBKOyqUGGnPQBcYU4mHAmoCEzcPJxjWYs1hhW6Mtiiz5NV4u44N9MQASPKndK6Mjw/exec';
-      const urlInput = document.getElementById('url-input');
-      const shortenBtn = document.getElementById('shorten-btn');
-      const loading = document.getElementById('loading');
-      const resultContainer = document.getElementById('result-container');
-      const shortenedUrlElem = document.getElementById('shortened-url');
-      const copyBtn = document.getElementById('copy-btn');
-      const errorMessage = document.getElementById('error-message');
+// Function to handle JSONP responses
+function handleJSONPResponse(data) {
+  // This will be called by the JSONP response
+  if (data.url) {
+    window.location.href = data.url;
+  } else {
+    document.body.innerHTML = '<div class="container"><h1>URL not found</h1></div>';
+  }
+}
 
-      let currentTheme = localStorage.getItem('theme') || 'dark';
+// Check for URL hash to redirect - Run this immediately
+function checkForRedirect() {
+  const hash = window.location.hash;
+  
+  if (hash && hash.length > 1) {
+    const shortId = hash.substring(1); // Remove the # character
+    
+    // Hide the UI immediately to speed up redirect
+    document.body.innerHTML = '';
+    document.body.style.backgroundColor = 'var(--background)';
+    
+    // Create and append loading spinner
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'loading';
+    loadingDiv.style.display = 'flex';
+    
+    const spinner = document.createElement('div');
+    spinner.className = 'loading-spinner';
+    
+    loadingDiv.appendChild(spinner);
+    document.body.appendChild(loadingDiv);
+    
+    // Use JSONP to work around CORS
+    const script = document.createElement('script');
+    script.src = `${SCRIPT_URL}?id=${shortId}&callback=handleJSONPResponse`;
+    document.head.appendChild(script);
+  }
+}
+
+// Run redirect check on page load before DOM content loaded
+if (window.location.hash) {
+  checkForRedirect();
+}
+
+// Also run when hash changes (for SPA behavior)
+window.addEventListener('hashchange', checkForRedirect);
+
+// The rest of the functionality runs after DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+  const urlInput = document.getElementById('url-input');
+  const shortenBtn = document.getElementById('shorten-btn');
+  const loading = document.getElementById('loading');
+  const resultContainer = document.getElementById('result-container');
+  const shortenedUrlElem = document.getElementById('shortened-url');
+  const copyBtn = document.getElementById('copy-btn');
+  const errorMessage = document.getElementById('error-message');
+  
+  // Set theme
+  let currentTheme = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', currentTheme);
+  
+  // Theme switch event handler (if the element exists)
+  const themeSwitch = document.getElementById('themeSwitch');
+  if (themeSwitch) {
+    themeSwitch.addEventListener('click', () => {
+      currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', currentTheme);
-
-      const themeSwitch = document.getElementById('themeSwitch');
-      if (themeSwitch) {
-        themeSwitch.addEventListener('click', () => {
-          currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
-          document.documentElement.setAttribute('data-theme', currentTheme);
-          localStorage.setItem('theme', currentTheme);
-        });
-      }
-
-      shortenBtn.addEventListener('click', shortenUrl);
-
-      async function shortenUrl() {
-        const longUrl = urlInput.value.trim();
-        if (!longUrl) {
-          showError('Please enter a URL');
-          return;
-        }
-        try {
-          new URL(longUrl);
-        } catch {
-          showError('Please enter a valid URL');
-          return;
-        }
-        showLoading();
-        hideError();
-        try {
-          const response = await fetch(SCRIPT_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: longUrl }),
-          });
-          const data = await response.json();
+      localStorage.setItem('theme', currentTheme);
+    });
+  }
+  
+  // Shorten URL functionality
+  shortenBtn.addEventListener('click', shortenUrl);
+  
+  async function shortenUrl() {
+    const longUrl = urlInput.value.trim();
+    
+    // Basic validation
+    if (!longUrl) {
+      showError('Please enter a URL');
+      return;
+    }
+    
+    try {
+      new URL(longUrl);
+    } catch (e) {
+      showError('Please enter a valid URL');
+      return;
+    }
+    
+    showLoading();
+    hideError();
+    
+    // Use a form submission approach to avoid CORS issues
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = SCRIPT_URL;
+    form.target = 'hiddenFrame';
+    form.style.display = 'none';
+    
+    const urlInput = document.createElement('input');
+    urlInput.name = 'url';
+    urlInput.value = longUrl;
+    form.appendChild(urlInput);
+    
+    // Create hidden iframe to receive the response
+    const iframe = document.createElement('iframe');
+    iframe.name = 'hiddenFrame';
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+    
+    // Handle the response from the iframe
+    iframe.onload = function() {
+      try {
+        const iframeContent = iframe.contentDocument.body.textContent;
+        if (iframeContent) {
+          const data = JSON.parse(iframeContent);
           hideLoading();
+          
           if (data.error) {
             showError(data.error);
-          } else {
+          } else if (data.id) {
             const shortUrl = `${window.location.origin}/#${data.id}`;
             showResult(shortUrl);
+          } else {
+            showError('Unexpected response from server');
           }
-        } catch {
+        } else {
           hideLoading();
-          showError('An error occurred. Please try again later.');
+          showError('No response from server');
         }
+      } catch (error) {
+        hideLoading();
+        showError('Error processing response');
+        console.error('Error:', error);
       }
-
-      copyBtn.addEventListener('click', () => {
-        const textToCopy = shortenedUrlElem.textContent;
-        navigator.clipboard.writeText(textToCopy).then(() => {
-          const originalText = copyBtn.textContent;
-          copyBtn.textContent = 'Copied!';
-          setTimeout(() => { copyBtn.textContent = originalText; }, 2000);
-        });
-      });
-
-      function showLoading() {
-        loading.style.display = 'flex';
-        shortenBtn.disabled = true;
-      }
-
-      function hideLoading() {
-        loading.style.display = 'none';
-        shortenBtn.disabled = false;
-      }
-
-      function showResult(shortUrl) {
-        shortenedUrlElem.textContent = shortUrl;
-        resultContainer.style.display = 'flex';
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+        document.body.removeChild(form);
+      }, 100);
+    };
+    
+    // Submit the form
+    document.body.appendChild(form);
+    form.submit();
+  }
+  
+  // Copy URL functionality
+  copyBtn.addEventListener('click', () => {
+    const textToCopy = shortenedUrlElem.textContent;
+    
+    navigator.clipboard.writeText(textToCopy)
+      .then(() => {
+        const originalText = copyBtn.textContent;
+        copyBtn.textContent = 'Copied!';
+        
         setTimeout(() => {
-          resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }, 100);
-      }
-
-      function showError(message) {
-        errorMessage.textContent = message;
-        errorMessage.style.display = 'block';
-      }
-
-      function hideError() {
-        errorMessage.style.display = 'none';
-      }
-
-      urlInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-          shortenUrl();
-        }
+          copyBtn.textContent = originalText;
+        }, 2000);
+      })
+      .catch(err => {
+        console.error('Failed to copy text: ', err);
       });
+  });
+  
+  // Helper functions
+  function showLoading() {
+    loading.style.display = 'flex';
+    shortenBtn.disabled = true;
+  }
+  
+  function hideLoading() {
+    loading.style.display = 'none';
+    shortenBtn.disabled = false;
+  }
+  
+  function showResult(shortUrl) {
+    shortenedUrlElem.textContent = shortUrl;
+    resultContainer.style.display = 'flex';
+    
+    // Scroll to show result if needed
+    setTimeout(() => {
+      resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
+  }
+  
+  function showError(message) {
+    errorMessage.textContent = message;
+    errorMessage.style.display = 'block';
+  }
+  
+  function hideError() {
+    errorMessage.style.display = 'none';
+  }
+  
+  // Press Enter to submit
+  urlInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      shortenUrl();
+    }
+  });
 
-      if (window.location.hash) {
-        checkForRedirect();
-      }
-    });
+  // Run redirect check again after DOM is loaded (in case it was missed)
+  if (window.location.hash) {
+    checkForRedirect();
+  }
+});
   </script>
 </body>
 </html>
