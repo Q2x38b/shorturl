@@ -130,6 +130,8 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      width: 100%;
+      overflow: hidden;
     }
 
     .result-url {
@@ -137,6 +139,9 @@
       font-size: 0.875rem;
       color: var(--text-primary);
       word-break: break-all;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      margin-right: 0.5rem;
     }
 
     .copy-btn {
@@ -150,6 +155,9 @@
       transition: all 0.15s ease;
       margin-left: 0.5rem;
       flex-shrink: 0;
+      white-space: nowrap;
+      min-width: 50px;
+      text-align: center;
     }
 
     .copy-btn:hover {
@@ -212,6 +220,22 @@
     @media (max-width: 640px) {
       .container {
         padding: 1.5rem 1rem;
+      }
+      
+      .result-link {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      
+      .result-url {
+        margin-right: 0;
+        margin-bottom: 0.5rem;
+        text-align: center;
+      }
+      
+      .copy-btn {
+        margin-left: 0;
+        width: 100%;
       }
     }
   </style>
@@ -324,6 +348,9 @@
       function showResult(shortUrl) {
         shortenedUrlElem.textContent = shortUrl;
         resultContainer.style.display = 'flex';
+        
+        // Ensure visibility of the result
+        resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
       
       function showError(message) {
@@ -415,15 +442,24 @@
         
         navigator.clipboard.writeText(textToCopy)
           .then(() => {
-            const originalText = copyBtn.textContent;
+            // Visual feedback for copy success
             copyBtn.textContent = 'Copied!';
+            copyBtn.style.backgroundColor = 'var(--border-color)';
+            copyBtn.style.color = 'var(--text-primary)';
             
             setTimeout(() => {
-              copyBtn.textContent = originalText;
+              copyBtn.textContent = 'Copy';
+              copyBtn.style.backgroundColor = '';
+              copyBtn.style.color = '';
             }, 2000);
           })
           .catch(err => {
             console.error('Failed to copy text: ', err);
+            copyBtn.textContent = 'Error';
+            
+            setTimeout(() => {
+              copyBtn.textContent = 'Copy';
+            }, 2000);
           });
       });
       
