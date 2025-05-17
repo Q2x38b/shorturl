@@ -243,12 +243,10 @@
   </div>
 
   <script>
-// Updated JavaScript for URL Shortener with CORS Workaround
+// Fixed JavaScript for URL Shortener with CORS Workaround
 
 // Set up the CORS proxy URL for POST requests
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby0VaBKOyqUGGnPQBcYU4mHAmoCEzcPJxjWYs1hhW6Mtiiz5NV4u44N9MQASPKndK6Mjw/exec';
-// The JSONP URL is used for GET requests (URL lookup)
-const JSONP_URL = SCRIPT_URL + '?callback=handleJSONPResponse';
 
 // Function to handle JSONP responses
 function handleJSONPResponse(data) {
@@ -321,9 +319,37 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
-  // Shorten URL functionality
-  shortenBtn.addEventListener('click', shortenUrl);
+  // Helper functions
+  function showLoading() {
+    loading.style.display = 'flex';
+    shortenBtn.disabled = true;
+  }
   
+  function hideLoading() {
+    loading.style.display = 'none';
+    shortenBtn.disabled = false;
+  }
+  
+  function showResult(shortUrl) {
+    shortenedUrlElem.textContent = shortUrl;
+    resultContainer.style.display = 'flex';
+    
+    // Scroll to show result if needed
+    setTimeout(() => {
+      resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
+  }
+  
+  function showError(message) {
+    errorMessage.textContent = message;
+    errorMessage.style.display = 'block';
+  }
+  
+  function hideError() {
+    errorMessage.style.display = 'none';
+  }
+  
+  // Shorten URL functionality
   async function shortenUrl() {
     const longUrl = urlInput.value.trim();
     
@@ -350,10 +376,10 @@ document.addEventListener('DOMContentLoaded', function() {
     form.target = 'hiddenFrame';
     form.style.display = 'none';
     
-    const urlInput = document.createElement('input');
-    urlInput.name = 'url';
-    urlInput.value = longUrl;
-    form.appendChild(urlInput);
+    const formUrlInput = document.createElement('input');
+    formUrlInput.name = 'url';
+    formUrlInput.value = longUrl;
+    form.appendChild(formUrlInput);
     
     // Create hidden iframe to receive the response
     const iframe = document.createElement('iframe');
@@ -399,6 +425,9 @@ document.addEventListener('DOMContentLoaded', function() {
     form.submit();
   }
   
+  // Attach event listeners
+  shortenBtn.addEventListener('click', shortenUrl);
+  
   // Copy URL functionality
   copyBtn.addEventListener('click', () => {
     const textToCopy = shortenedUrlElem.textContent;
@@ -416,36 +445,6 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Failed to copy text: ', err);
       });
   });
-  
-  // Helper functions
-  function showLoading() {
-    loading.style.display = 'flex';
-    shortenBtn.disabled = true;
-  }
-  
-  function hideLoading() {
-    loading.style.display = 'none';
-    shortenBtn.disabled = false;
-  }
-  
-  function showResult(shortUrl) {
-    shortenedUrlElem.textContent = shortUrl;
-    resultContainer.style.display = 'flex';
-    
-    // Scroll to show result if needed
-    setTimeout(() => {
-      resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 100);
-  }
-  
-  function showError(message) {
-    errorMessage.textContent = message;
-    errorMessage.style.display = 'block';
-  }
-  
-  function hideError() {
-    errorMessage.style.display = 'none';
-  }
   
   // Press Enter to submit
   urlInput.addEventListener('keypress', (e) => {
