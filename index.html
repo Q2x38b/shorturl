@@ -219,46 +219,30 @@
 <body>
   <div class="container" id="app-container">
     <h1>URL Shortener</h1>
-    
     <div class="form-container">
       <div class="input-group">
         <input type="url" id="url-input" placeholder="Enter your long URL" required>
         <div class="error-message" id="error-message"></div>
       </div>
-      
       <button id="shorten-btn">Shorten URL</button>
-      
       <div class="loading" id="loading">
         <div class="loading-spinner"></div>
         <span>Processing...</span>
       </div>
     </div>
-    
     <div class="result-container" id="result-container">
       <div class="result-link">
         <span class="result-url" id="shortened-url"></span>
         <button class="copy-btn" id="copy-btn">Copy</button>
       </div>
     </div>
-    
     <div class="divider"></div>
-    
     <div class="info">
       <p>Fast • Minimal • Secure</p>
     </div>
   </div>
 
   <script>
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby0VaBKOyqUGGnPQBcYU4mHAmoCEzcPJxjWYs1hhW6Mtiiz5NV4u44N9MQASPKndK6Mjw/exec';
-    const urlInput = document.getElementById('url-input');
-    const shortenBtn = document.getElementById('shorten-btn');
-    const loading = document.getElementById('loading');
-    const resultContainer = document.getElementById('result-container');
-    const shortenedUrlElem = document.getElementById('shortened-url');
-    const copyBtn = document.getElementById('copy-btn');
-    const errorMessage = document.getElementById('error-message');
-    const themeSwitch = document.getElementById('themeSwitch');
-
     function checkForRedirect() {
       const hash = window.location.hash;
       if (hash && hash.length > 1) {
@@ -281,101 +265,119 @@
               document.body.innerHTML = '<div class="container"><h1>URL not found</h1></div>';
             }
           })
-          .catch(error => {
+          .catch(() => {
             document.body.innerHTML = '<div class="container"><h1>Error retrieving URL</h1></div>';
-            console.error('Error:', error);
           });
       }
     }
 
-    document.addEventListener('DOMContentLoaded', checkForRedirect);
+    if (window.location.hash) {
+      checkForRedirect();
+    }
     window.addEventListener('hashchange', checkForRedirect);
 
-    let currentTheme = localStorage.getItem('theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', currentTheme);
+    document.addEventListener('DOMContentLoaded', function() {
+      const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby0VaBKOyqUGGnPQBcYU4mHAmoCEzcPJxjWYs1hhW6Mtiiz5NV4u44N9MQASPKndK6Mjw/exec';
+      const urlInput = document.getElementById('url-input');
+      const shortenBtn = document.getElementById('shorten-btn');
+      const loading = document.getElementById('loading');
+      const resultContainer = document.getElementById('result-container');
+      const shortenedUrlElem = document.getElementById('shortened-url');
+      const copyBtn = document.getElementById('copy-btn');
+      const errorMessage = document.getElementById('error-message');
 
-    themeSwitch.addEventListener('click', () => {
-      currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      let currentTheme = localStorage.getItem('theme') || 'dark';
       document.documentElement.setAttribute('data-theme', currentTheme);
-      localStorage.setItem('theme', currentTheme);
-    });
 
-    shortenBtn.addEventListener('click', shortenUrl);
-
-    async function shortenUrl() {
-      const longUrl = urlInput.value.trim();
-      if (!longUrl) {
-        showError('Please enter a URL');
-        return;
-      }
-      try {
-        new URL(longUrl);
-      } catch (e) {
-        showError('Please enter a valid URL');
-        return;
-      }
-      showLoading();
-      hideError();
-      try {
-        const response = await fetch(SCRIPT_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: longUrl }),
+      const themeSwitch = document.getElementById('themeSwitch');
+      if (themeSwitch) {
+        themeSwitch.addEventListener('click', () => {
+          currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', currentTheme);
+          localStorage.setItem('theme', currentTheme);
         });
-        const data = await response.json();
-        hideLoading();
-        if (data.error) {
-          showError(data.error);
-        } else {
-          const shortUrl = `${window.location.origin}/#${data.id}`;
-          showResult(shortUrl);
-        }
-      } catch (error) {
-        hideLoading();
-        showError('An error occurred. Please try again later.');
-        console.error('Error:', error);
       }
-    }
 
-    copyBtn.addEventListener('click', () => {
-      const textToCopy = shortenedUrlElem.textContent;
-      navigator.clipboard.writeText(textToCopy)
-        .then(() => {
+      shortenBtn.addEventListener('click', shortenUrl);
+
+      async function shortenUrl() {
+        const longUrl = urlInput.value.trim();
+        if (!longUrl) {
+          showError('Please enter a URL');
+          return;
+        }
+        try {
+          new URL(longUrl);
+        } catch {
+          showError('Please enter a valid URL');
+          return;
+        }
+        showLoading();
+        hideError();
+        try {
+          const response = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: longUrl }),
+          });
+          const data = await response.json();
+          hideLoading();
+          if (data.error) {
+            showError(data.error);
+          } else {
+            const shortUrl = `${window.location.origin}/#${data.id}`;
+            showResult(shortUrl);
+          }
+        } catch {
+          hideLoading();
+          showError('An error occurred. Please try again later.');
+        }
+      }
+
+      copyBtn.addEventListener('click', () => {
+        const textToCopy = shortenedUrlElem.textContent;
+        navigator.clipboard.writeText(textToCopy).then(() => {
           const originalText = copyBtn.textContent;
           copyBtn.textContent = 'Copied!';
           setTimeout(() => { copyBtn.textContent = originalText; }, 2000);
-        })
-        .catch(err => { console.error('Failed to copy text: ', err); });
-    });
+        });
+      });
 
-    function showLoading() {
-      loading.style.display = 'flex';
-      shortenBtn.disabled = true;
-    }
+      function showLoading() {
+        loading.style.display = 'flex';
+        shortenBtn.disabled = true;
+      }
 
-    function hideLoading() {
-      loading.style.display = 'none';
-      shortenBtn.disabled = false;
-    }
+      function hideLoading() {
+        loading.style.display = 'none';
+        shortenBtn.disabled = false;
+      }
 
-    function showResult(shortUrl) {
-      shortenedUrlElem.textContent = shortUrl;
-      resultContainer.style.display = 'flex';
-      setTimeout(() => { resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 100);
-    }
+      function showResult(shortUrl) {
+        shortenedUrlElem.textContent = shortUrl;
+        resultContainer.style.display = 'flex';
+        setTimeout(() => {
+          resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
+      }
 
-    function showError(message) {
-      errorMessage.textContent = message;
-      errorMessage.style.display = 'block';
-    }
+      function showError(message) {
+        errorMessage.textContent = message;
+        errorMessage.style.display = 'block';
+      }
 
-    function hideError() {
-      errorMessage.style.display = 'none';
-    }
+      function hideError() {
+        errorMessage.style.display = 'none';
+      }
 
-    urlInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        shortenUrl();
+      urlInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          shortenUrl();
+        }
+      });
+
+      if (window.location.hash) {
+        checkForRedirect();
       }
     });
   </script>
