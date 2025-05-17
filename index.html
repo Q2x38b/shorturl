@@ -243,19 +243,61 @@
   </div>
 
   <script>
-// Fixed JavaScript for URL Shortener with CORS Workaround
+// Simplified JavaScript with pure JSONP approach
+// This approach avoids both CORS and iframe security issues
 
-// Set up the CORS proxy URL for POST requests
+// Set up the Google Apps Script URL
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby0VaBKOyqUGGnPQBcYU4mHAmoCEzcPJxjWYs1hhW6Mtiiz5NV4u44N9MQASPKndK6Mjw/exec';
 
-// Function to handle JSONP responses
-function handleJSONPResponse(data) {
-  // This will be called by the JSONP response
+// Global callback counter to create unique callback names
+let callbackCounter = 0;
+
+// Function to handle JSONP redirect responses
+function handleRedirectResponse(data) {
   if (data.url) {
     window.location.href = data.url;
   } else {
     document.body.innerHTML = '<div class="container"><h1>URL not found</h1></div>';
   }
+}
+
+// Function to create a unique callback name
+function getUniqueCallbackName(prefix = 'callback') {
+  return `${prefix}_${Date.now()}_${callbackCounter++}`;
+}
+
+// Function to make a JSONP request
+function jsonpRequest(url, params, callback) {
+  // Create a unique callback name
+  const callbackName = getUniqueCallbackName();
+  
+  // Add the callback to the window object
+  window[callbackName] = function(data) {
+    // Clean up
+    document.head.removeChild(script);
+    delete window[callbackName];
+    
+    // Call the provided callback with the data
+    callback(data);
+  };
+  
+  // Build the URL with parameters
+  const queryParams = new URLSearchParams(params);
+  queryParams.append('callback', callbackName);
+  
+  // Create script element
+  const script = document.createElement('script');
+  script.src = `${url}?${queryParams.toString()}`;
+  
+  // Add error handling
+  script.onerror = function() {
+    document.head.removeChild(script);
+    delete window[callbackName];
+    callback({ error: 'Request failed' });
+  };
+  
+  // Append the script to the document
+  document.head.appendChild(script);
 }
 
 // Check for URL hash to redirect - Run this immediately
@@ -280,14 +322,12 @@ function checkForRedirect() {
     loadingDiv.appendChild(spinner);
     document.body.appendChild(loadingDiv);
     
-    // Use JSONP to work around CORS
-    const script = document.createElement('script');
-    script.src = `${SCRIPT_URL}?id=${shortId}&callback=handleJSONPResponse`;
-    document.head.appendChild(script);
+    // Use JSONP to get the URL
+    jsonpRequest(SCRIPT_URL, { id: shortId }, handleRedirectResponse);
   }
 }
 
-// Run redirect check on page load before DOM content loaded
+// Run redirect check on page load
 if (window.location.hash) {
   checkForRedirect();
 }
@@ -349,8 +389,22 @@ document.addEventListener('DOMContentLoaded', function() {
     errorMessage.style.display = 'none';
   }
   
+  // Function to handle shorten URL responses
+  function handleShortenResponse(data) {
+    hideLoading();
+    
+    if (data.error) {
+      showError(data.error);
+    } else if (data.id) {
+      const shortUrl = `${window.location.origin}/#${data.id}`;
+      showResult(shortUrl);
+    } else {
+      showError('Unexpected response from server');
+    }
+  }
+  
   // Shorten URL functionality
-  async function shortenUrl() {
+  function shortenUrl() {
     const longUrl = urlInput.value.trim();
     
     // Basic validation
@@ -369,60 +423,8 @@ document.addEventListener('DOMContentLoaded', function() {
     showLoading();
     hideError();
     
-    // Use a form submission approach to avoid CORS issues
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = SCRIPT_URL;
-    form.target = 'hiddenFrame';
-    form.style.display = 'none';
-    
-    const formUrlInput = document.createElement('input');
-    formUrlInput.name = 'url';
-    formUrlInput.value = longUrl;
-    form.appendChild(formUrlInput);
-    
-    // Create hidden iframe to receive the response
-    const iframe = document.createElement('iframe');
-    iframe.name = 'hiddenFrame';
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-    
-    // Handle the response from the iframe
-    iframe.onload = function() {
-      try {
-        const iframeContent = iframe.contentDocument.body.textContent;
-        if (iframeContent) {
-          const data = JSON.parse(iframeContent);
-          hideLoading();
-          
-          if (data.error) {
-            showError(data.error);
-          } else if (data.id) {
-            const shortUrl = `${window.location.origin}/#${data.id}`;
-            showResult(shortUrl);
-          } else {
-            showError('Unexpected response from server');
-          }
-        } else {
-          hideLoading();
-          showError('No response from server');
-        }
-      } catch (error) {
-        hideLoading();
-        showError('Error processing response');
-        console.error('Error:', error);
-      }
-      
-      // Clean up
-      setTimeout(() => {
-        document.body.removeChild(iframe);
-        document.body.removeChild(form);
-      }, 100);
-    };
-    
-    // Submit the form
-    document.body.appendChild(form);
-    form.submit();
+    // Use JSONP to create a short URL
+    jsonpRequest(SCRIPT_URL, { url: longUrl, action: 'shorten' }, handleShortenResponse);
   }
   
   // Attach event listeners
