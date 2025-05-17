@@ -118,7 +118,6 @@
       margin-top: 1.5rem;
       display: none;
       flex-direction: column;
-      gap: 0.5rem;
       width: 100%;
     }
 
@@ -128,23 +127,25 @@
       border-radius: 0.25rem;
       padding: 0.75rem 1rem;
       display: flex;
-      justify-content: space-between;
+      flex-direction: row;
       align-items: center;
       width: 100%;
-      overflow: hidden;
     }
 
     .result-url {
+      flex: 1;
       font-family: var(--font-geist-mono);
       font-size: 0.875rem;
       color: var(--text-primary);
-      word-break: break-all;
-      text-overflow: ellipsis;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      white-space: normal;
       overflow: hidden;
-      margin-right: 0.5rem;
+      text-overflow: ellipsis;
     }
 
     .copy-btn {
+      flex-shrink: 0;
       background-color: transparent;
       border: 1px solid var(--border-color);
       border-radius: 0.25rem;
@@ -153,10 +154,8 @@
       font-size: 0.75rem;
       cursor: pointer;
       transition: all 0.15s ease;
-      margin-left: 0.5rem;
-      flex-shrink: 0;
-      white-space: nowrap;
-      min-width: 50px;
+      margin-left: 0.75rem;
+      min-width: 60px;
       text-align: center;
     }
 
@@ -225,12 +224,12 @@
       .result-link {
         flex-direction: column;
         align-items: stretch;
+        gap: 0.75rem;
       }
       
       .result-url {
-        margin-right: 0;
-        margin-bottom: 0.5rem;
         text-align: center;
+        width: 100%;
       }
       
       .copy-btn {
@@ -260,7 +259,7 @@
     
     <div class="result-container" id="result-container">
       <div class="result-link">
-        <span class="result-url" id="shortened-url"></span>
+        <div class="result-url" id="shortened-url"></div>
         <button class="copy-btn" id="copy-btn">Copy</button>
       </div>
     </div>
@@ -283,6 +282,13 @@
       if (hash && hash.length > 1) {
         const shortId = hash.substring(1); // Remove the # character
         
+        // First check localStorage for faster response
+        const urlData = JSON.parse(localStorage.getItem('urlShortener') || '{}');
+        if (urlData[shortId]) {
+          window.location.href = urlData[shortId];
+          return;
+        }
+        
         // Hide the UI immediately to speed up redirect
         document.body.innerHTML = '';
         document.body.style.backgroundColor = 'var(--background)';
@@ -298,11 +304,17 @@
         loadingDiv.appendChild(spinner);
         document.body.appendChild(loadingDiv);
         
-        // Fetch the original URL and redirect
+        // Try to get from Google Sheet
         fetch(`${SCRIPT_URL}?id=${shortId}`)
           .then(response => response.json())
           .then(data => {
             if (data.url) {
+              // Cache the result in localStorage for future
+              const urlData = JSON.parse(localStorage.getItem('urlShortener') || '{}');
+              urlData[shortId] = data.url;
+              localStorage.setItem('urlShortener', JSON.stringify(urlData));
+              
+              // Redirect to the URL
               window.location.href = data.url;
             } else {
               document.body.innerHTML = '<div class="container"><h1>URL not found</h1></div>';
@@ -362,7 +374,7 @@
         errorMessage.style.display = 'none';
       }
       
-      // Direct URL creation using a simple workaround for CORS issues
+      // Send URL to Google Sheet and get short ID
       async function shortenUrl() {
         const longUrl = urlInput.value.trim();
         
@@ -381,19 +393,11 @@
         
         showLoading();
         hideError();
-
-        // Generate a random 6-character ID
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        let id = '';
-        for (let i = 0; i < 6; i++) {
-          id += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
         
-        // Store in localStorage (client-side only, but works for demo)
+        // Check if URL already exists in localStorage cache
         const urlData = JSON.parse(localStorage.getItem('urlShortener') || '{}');
-        
-        // Check if URL already exists
         let existingId = null;
+        
         Object.entries(urlData).forEach(([key, value]) => {
           if (value === longUrl) {
             existingId = key;
@@ -401,37 +405,50 @@
         });
         
         if (existingId) {
-          id = existingId;
-        } else {
-          // Store the new URL
-          urlData[id] = longUrl;
-          localStorage.setItem('urlShortener', JSON.stringify(urlData));
+          // Use the existing ID from cache
+          setTimeout(() => {
+            hideLoading();
+            const shortUrl = `${window.location.origin}/#${existingId}`;
+            showResult(shortUrl);
+          }, 500);
+          return;
         }
         
-        // Show result after a short delay to simulate processing
-        setTimeout(() => {
+        // Use fetch with no-cors mode to avoid CORS issues
+        try {
+          // Create a unique ID by combining timestamp and random string
+          const timestamp = new Date().getTime().toString(36);
+          const randomStr = Math.random().toString(36).substring(2, 5);
+          const id = timestamp.slice(-3) + randomStr;
+          
+          // Save to localStorage first for faster future access
+          urlData[id] = longUrl;
+          localStorage.setItem('urlShortener', JSON.stringify(urlData));
+          
+          // Send to Google Sheet in background
+          const formData = new FormData();
+          formData.append('id', id);
+          formData.append('url', longUrl);
+          
+          fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: formData,
+            mode: 'no-cors'  // This prevents CORS errors but means we can't read the response
+          }).catch(error => {
+            console.log('Background sync error (non-critical):', error);
+          });
+          
+          // Show result even if Google Sheet sync might fail
           hideLoading();
           const shortUrl = `${window.location.origin}/#${id}`;
           showResult(shortUrl);
-        }, 500);
-      }
-      
-      // Modified redirect function to use localStorage
-      function checkLocalRedirect() {
-        const hash = window.location.hash;
-        
-        if (hash && hash.length > 1) {
-          const shortId = hash.substring(1);
-          const urlData = JSON.parse(localStorage.getItem('urlShortener') || '{}');
           
-          if (urlData[shortId]) {
-            window.location.href = urlData[shortId];
-          }
+        } catch (error) {
+          hideLoading();
+          showError('Error creating short URL');
+          console.error('Error:', error);
         }
       }
-      
-      // Run local redirect check
-      checkLocalRedirect();
       
       // Attach event listeners
       shortenBtn.addEventListener('click', shortenUrl);
