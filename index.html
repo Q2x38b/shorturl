@@ -238,6 +238,7 @@
       }
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 </head>
 <body>
   <div class="container" id="app-container">
@@ -272,6 +273,72 @@
   </div>
 
   <script>
+    // Encoding utilities: base64url + scheme strip + deflate choice
+    function toBase64Url(bytes) {
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    function fromBase64Url(str) {
+      const b64 = str.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((str.length + 3) % 4);
+      const bin = atob(b64);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+
+    function stripScheme(url) {
+      if (url.startsWith('https://')) return { scheme: 0, rest: url.slice(8) };
+      if (url.startsWith('http://')) return { scheme: 1, rest: url.slice(7) };
+      return { scheme: 2, rest: url };
+    }
+
+    function restoreScheme(scheme, rest) {
+      if (scheme === 0) return 'https://' + rest;
+      if (scheme === 1) return 'http://' + rest;
+      return rest;
+    }
+
+    function encodeUrlForFragment(longUrl) {
+      let normalized = longUrl;
+      try { normalized = new URL(longUrl).href; } catch (_) {}
+      const { scheme, rest } = stripScheme(normalized);
+      const raw = encodeURIComponent(rest);
+      let compressed = '';
+      try {
+        if (window.pako) {
+          const deflated = window.pako.deflate(rest, { level: 9 });
+          compressed = toBase64Url(deflated);
+        }
+      } catch (_) {}
+      const hasCompressed = compressed && compressed.length > 0;
+      const body = hasCompressed && compressed.length < raw.length ? 'c' + compressed : 'r' + raw;
+      return String(scheme) + body;
+    }
+
+    function decodeUrlFromFragment(fragment) {
+      const scheme = Number(fragment[0]);
+      const kind = fragment[1];
+      const payload = fragment.slice(2);
+      let rest = '';
+      if (kind === 'c') {
+        const bytes = fromBase64Url(payload);
+        if (window.pako) {
+          rest = window.pako.inflate(bytes, { to: 'string' });
+        } else {
+          throw new Error('Compression decode not available');
+        }
+      } else {
+        rest = decodeURIComponent(payload);
+      }
+      return restoreScheme(scheme, rest);
+    }
+
+    function isEncodedToken(token) {
+      return /^[0-2][cr][A-Za-z0-9_-]+$/.test(token) && token.length > 12;
+    }
+
     // Set up the URL for our Google Apps Script Web App
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby0VaBKOyqUGGnPQBcYU4mHAmoCEzcPJxjWYs1hhW6Mtiiz5NV4u44N9MQASPKndK6Mjw/exec';
     
